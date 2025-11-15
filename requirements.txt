@@ -1,0 +1,10 @@
+numpy
+pandas
+matplotlib
+seaborn
+librosa
+scikit-learn
+nltk
+soundfile
+datasets
+huggingface_hub
