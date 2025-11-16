@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 <!-- CLARITY — Text-Based Political Interview Analysis
 
 This project performs text-based exploratory data analysis (EDA) on political interview responses.
@@ -94,3 +95,6 @@ Safe fallbacks included for missing sentence tokenizers.
 License
 
 This project is licensed under the MIT License — see LICENSE for details. -->
+=======
+
+>>>>>>> e6ab7d8243b10983ae4d7f0d0f1ec1f0e9f8eeb4
