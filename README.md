@@ -4,25 +4,6 @@ CLARITY — Text-Based Political Interview Analysis
 This project performs text-based exploratory data analysis (EDA) on political interview responses.
 It focuses on clarity and evasion labels and generates visualizations for deeper insights.
 
-Project Structure
-CLARITY/
-│
-├── Assignment1/
-│   ├── src/
-│   │   ├── eda_text.py        # Main script for text EDA
-│   │   ├── eda_audio.py       # Optional audio EDA (skipped if no audio)
-│   │   ├── utils.py           # Helper functions (plot saving, paths, etc.)
-│   │   └── save_dataset.py    # Dataset download/preprocessing
-│   │
-│   ├── dataset/               # CSV dataset files
-│   │   ├── train.csv
-│   │   └── test.csv
-│   │
-│   ├── plots/                 # Generated plots saved as PDFs
-│   └── README.md
-│
-├── venv/                      # Python virtual environment (ignored in git)
-└── LICENSE                    # MIT License
 
 Installation
 
