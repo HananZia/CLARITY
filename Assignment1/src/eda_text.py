@@ -1,176 +1,245 @@
-# src/eda_text.py
 """
-Text EDA:
-- load data CSV (train.csv expected in ../data)
-- token length stats, histogram
-- frequent n-grams (unigrams + bigrams)
+Advanced Text EDA:
+- load data CSV (train.csv)
+- token stats, char stats, sentence stats
+- histogram plots
 - vocabulary size
-- language detection (langdetect)
-- sentiment distribution (transformers pipeline, optional)
-- saves plots to ../plots as PDFs
+- frequent n-grams (uni/bigrams)
+- readability metrics
+- TF-IDF similarity distribution
+- keyword extraction (RAKE)
+- wordcloud generation
+- language detection (sampled)
+- sentiment distribution (optional)
+- saves plots as PDFs
 """
+
+# Imports
 import os
+import matplotlib
+matplotlib.use("Agg")  # headless mode
+from pathlib import Path
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt # for plotting
 import seaborn as sns
 from collections import Counter
-from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer # for n-grams and TF-IDF
+from sklearn.metrics.pairwise import cosine_similarity # for similarity
 from langdetect import detect
-from transformers import pipeline
 from tqdm import tqdm
+# NLTK setup
+import nltk
+try:
+    from nltk import sent_tokenize
+except:
+    def sent_tokenize(x): # fallback simple sentence tokenizer
+        return x.split(".")
 
-from utils import PLOTS_DIR, save_fig_pdf
+# NLTK stopwords
+from nltk.corpus import stopwords
+from textstat import flesch_reading_ease, flesch_kincaid_grade # readability
+from wordcloud import WordCloud
+from rake_nltk import Rake
+from utils import PLOTS_DIR, save_fig_pdf # custom utils
 
 sns.set(style="whitegrid")
 
-DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "dataset")
-TRAIN_CSV = os.path.join(DATA_DIR, "train.csv")
-TEST_CSV = os.path.join(DATA_DIR, "test.csv")
+DATASET_DIR = Path(__file__).parents[2] / "dataset"
+TRAIN_CSV = DATASET_DIR / "train.csv"
 
+os.makedirs(PLOTS_DIR, exist_ok=True)
+
+# Ensure NLTK deps
+nltk.download("punkt", quiet=True)
+nltk.download("stopwords", quiet=True)
+nltk.download("punkt_tab", quiet=True)
+
+# Data Loading
 def load_data():
-    if os.path.exists(TRAIN_CSV):
-        df = pd.read_csv(TRAIN_CSV)
-    else:
-        raise FileNotFoundError(f"{TRAIN_CSV} not found. Run save_dataset.py or put train.csv in dataset/")
-    return df
+    if TRAIN_CSV.exists():
+        return pd.read_csv(TRAIN_CSV)
+    raise FileNotFoundError(f"{TRAIN_CSV} not found. Put train.csv in dataset/.")
 
-def token_stats(texts):
-    token_lens = [len(str(t).split()) for t in texts]
-    return np.array(token_lens)
+# Compute basic text stats
+def compute_text_stats(texts):
+    stats = {
+        "token_len": [],
+        "char_len": [],
+        "sentence_len": []
+    }
 
-def plot_token_length_hist(token_lens):
-    fig, ax = plt.subplots(figsize=(8,4))
-    ax.hist(token_lens, bins=50)
-    ax.set_xlabel("Token length (words)")
+    for t in texts:
+        t = str(t)
+        tokens = t.split()
+        stats["token_len"].append(len(tokens))
+        stats["char_len"].append(len(t))
+        stats["sentence_len"].append(len(sent_tokenize(t)))
+
+    return stats
+
+# Plotting histograms
+def plot_hist(data, xlabel, filename, title=None, bins=50):
+    fig, ax = plt.subplots(figsize=(8, 4))
+    ax.hist(data, bins=bins)
+    ax.set_xlabel(xlabel)
     ax.set_ylabel("Count")
-    ax.set_title("Token length distribution (interview_answer)")
-    save_fig_pdf(fig, "text_token_length_hist.pdf")
+    ax.set_title(title or xlabel)
+    save_fig_pdf(fig, filename)
 
-def top_ngrams(texts, ngram_range=(1,1), topk=30):
-    vec = CountVectorizer(ngram_range=ngram_range, max_features=5000, stop_words='english')
+# N-grams
+def top_ngrams(texts, ngram_range=(1, 1), topk=30):
+    vec = CountVectorizer(
+        ngram_range=ngram_range,
+        stop_words="english",
+        max_features=8000,
+        min_df=2
+    )
     X = vec.fit_transform(texts)
-    sums = np.asarray(X.sum(axis=0)).ravel()
-    terms = vec.get_feature_names_out()
-    top_idx = np.argsort(sums)[::-1][:topk]
-    return [(terms[i], int(sums[i])) for i in top_idx]
+    vocab = vec.get_feature_names_out()
+    counts = np.asarray(X.sum(axis=0)).ravel()
+    idx = np.argsort(counts)[::-1][:topk]
+    return [(vocab[i], int(counts[i])) for i in idx]
 
-def plot_top_ngrams(ngrams, filename="top_unigrams.pdf", title="Top tokens"):
-    terms, counts = zip(*ngrams)
-    fig, ax = plt.subplots(figsize=(8,6))
+# Plot horizontal bar chart
+def plot_barh(pairs, filename, title):
+    terms, counts = zip(*pairs)
+    fig, ax = plt.subplots(figsize=(8, 6))
     ax.barh(range(len(terms))[::-1], counts)
     ax.set_yticks(range(len(terms)))
     ax.set_yticklabels(terms[::-1])
-    ax.set_xlabel("Count")
     ax.set_title(title)
     save_fig_pdf(fig, filename)
 
-def detect_languages(texts, sample_limit=2000):
-    from langdetect import DetectorFactory
-    DetectorFactory.seed = 0
+
+# Language Detection
+def detect_languages(texts, sample=1000):
     langs = []
-    for t in list(texts)[:sample_limit]:
+    for t in texts[:sample]:
         try:
             langs.append(detect(str(t)))
         except:
             langs.append("error")
     return Counter(langs)
 
-def sentiment_analysis(texts, model_name="distilbert-base-uncased-finetuned-sst-2-english", sample_limit=1000):
-    # Use transformers pipeline if model assets are available; this is optional and may download models.
-    try:
-        sentiment = pipeline("sentiment-analysis", model=model_name)
-    except Exception as e:
-        print("Sentiment pipeline unavailable:", e)
-        return None
-    results = []
-    for t in texts[:sample_limit]:
-        try:
-            res = sentiment(str(t)[:512])[0]  # truncate to 512
-            results.append(res)
-        except Exception:
-            results.append({"label":"ERROR","score":0.0})
-    return results
 
-def plot_label_distribution(df, label_col="evasion_label", filename="label_distribution.pdf", title="Evasion label distribution"):
-    counts = df[label_col].value_counts(dropna=False).sort_index()
-    fig, ax = plt.subplots(figsize=(6,4))
-    ax.bar(counts.index.astype(str), counts.values)
-    ax.set_xlabel(label_col)
-    ax.set_ylabel("Count")
-    ax.set_title(title)
+# Keyword Extraction (RAKE)
+def extract_keywords(texts, topk=20):
+    rake = Rake(stopwords.words("english"))
+    all_keywords = Counter()
+
+    for t in texts[:2000]:  # limit for speed
+        rake.extract_keywords_from_text(t)
+        extracted = rake.get_ranked_phrases()[0:5]
+        all_keywords.update(extracted)
+
+    return all_keywords.most_common(topk)
+
+
+# Readability
+def compute_readability(texts, sample=1000):
+    scores = []
+    grades = []
+    for t in texts[:sample]:
+        t = str(t)
+        scores.append(flesch_reading_ease(t))
+        grades.append(flesch_kincaid_grade(t))
+    return np.array(scores), np.array(grades)
+
+
+# TF-IDF Similarity Distribution
+def similarity_distribution(texts, sample=1500):
+    sample_texts = texts[:sample]
+    vec = TfidfVectorizer(stop_words="english")
+    X = vec.fit_transform(sample_texts)
+    sim = cosine_similarity(X)
+    tril = sim[np.tril_indices_from(sim, k=-1)]
+    return tril
+
+
+# Wordcloud
+def generate_wordcloud(texts, filename):
+    wc = WordCloud(
+        width=1000,
+        height=600,
+        stopwords=set(stopwords.words("english")),
+        background_color="white"
+    ).generate(" ".join(texts[:5000]))
+
+    fig = plt.figure(figsize=(10, 6))
+    plt.imshow(wc, interpolation="bilinear")
+    plt.axis("off")
     save_fig_pdf(fig, filename)
 
+
+# Main Function
 def main():
-    print("Loading data...")
+    print("Loading dataset…")
     df = load_data()
-    # Determine which text column to use: prefer 'interview_answer'
     text_col = "interview_answer" if "interview_answer" in df.columns else "text"
     print("Using text column:", text_col)
 
-    # Basic summary
-    print("Num rows:", len(df))
-    print("Columns:", df.columns.tolist())
-    print("Sample:")
-    print(df[[text_col]].head(3).to_string())
-
     texts = df[text_col].fillna("").astype(str).tolist()
 
-    # Token length
-    token_lens = token_stats(texts)
-    print("Token length: mean", token_lens.mean(), "median", np.median(token_lens))
-    plot_token_length_hist(token_lens)
+    # Basic stats
+    stats = compute_text_stats(texts)
+    print(f"Token length mean={np.mean(stats['token_len']):.2f}")
+    print(f"Char length mean={np.mean(stats['char_len']):.2f}")
+    print(f"Sentence count mean={np.mean(stats['sentence_len']):.2f}")
 
-    # Label distribution
-    if "evasion_label" in df.columns:
-        plot_label_distribution(df, label_col="evasion_label", filename="label_distribution_evasion.pdf", title="Evasion labels")
-    if "clarity_label" in df.columns:
-        plot_label_distribution(df, label_col="clarity_label", filename="label_distribution_clarity.pdf", title="Clarity labels")
+    plot_hist(stats["token_len"], "Token Count", "token_length.pdf", "Token Length Distribution")
+    plot_hist(stats["char_len"], "Character Count", "char_length.pdf", "Character Length Distribution")
+    plot_hist(stats["sentence_len"], "Sentence Count", "sentence_length.pdf", "Sentence Count Distribution")
 
-    # Top unigrams and bigrams
-    print("Computing top unigrams...")
-    uni = top_ngrams(texts, ngram_range=(1,1), topk=30)
-    plot_top_ngrams(uni, filename="top_unigrams.pdf", title="Top unigrams")
-    print("Computing top bigrams...")
-    bi = top_ngrams(texts, ngram_range=(2,2), topk=30)
-    plot_top_ngrams(bi, filename="top_bigrams.pdf", title="Top bigrams")
+    # N-grams
+    print("Computing top unigrams…")
+    uni = top_ngrams(texts, (1, 1))
+    plot_barh(uni, "top_unigrams.pdf", "Top Unigrams")
 
-    # Vocabulary size
-    vec = CountVectorizer(stop_words='english')
+    print("Computing top bigrams…")
+    bi = top_ngrams(texts, (2, 2))
+    plot_barh(bi, "top_bigrams.pdf", "Top Bigrams")
+
+    # Vocabulary Size
+    vec = CountVectorizer(stop_words="english")
     vec.fit(texts)
-    vocab_size = len(vec.vocabulary_)
-    print("Vocabulary size (after stopwords removal):", vocab_size)
+    print("Vocabulary size:", len(vec.vocabulary_))
 
-    # Language detection (sample)
-    print("Detecting languages (sample)...")
-    lang_counts = detect_languages(texts, sample_limit=2000)
-    print("Language counts (sample):", lang_counts)
-    # Save simple bar plot for languages
-    try:
-        labels, vals = zip(*lang_counts.items())
-        fig, ax = plt.subplots(figsize=(6,4))
-        ax.bar(labels, vals)
-        ax.set_title("Language detection (sample)")
-        save_fig_pdf(fig, "language_detection_sample.pdf")
-    except Exception:
-        pass
 
-    # Sentiment (optional)
-    print("Running optional sentiment analysis on sample (this will download a model if not present)...")
-    try:
-        sent_res = sentiment_analysis(texts, sample_limit=500)
-        if sent_res:
-            labels = [r["label"] for r in sent_res]
-            from collections import Counter
-            c = Counter(labels)
-            fig, ax = plt.subplots(figsize=(6,4))
-            ax.bar(list(c.keys()), list(c.values()))
-            ax.set_title("Sentiment distribution (sample)")
-            save_fig_pdf(fig, "sentiment_distribution_sample.pdf")
-    except Exception as e:
-        print("Skipping sentiment (error):", e)
+    # Keyword Extraction (RAKE)
+    print("Extracting keywords (RAKE)…")
+    kw = extract_keywords(texts)
+    print("Top keywords:", kw[:10])
+    plot_barh(kw, "keywords.pdf", "Top Extracted Keywords")
 
-    print("Text EDA complete. Plots in", PLOTS_DIR)
+    # Wordcloud
+    print("Generating wordcloud…")
+    generate_wordcloud(texts, "wordcloud.pdf")
+
+    # Readability
+    print("Computing readability metrics…")
+    fre, fk = compute_readability(texts)
+    print("Flesch Reading Ease mean:", fre.mean())
+    print("Flesch-Kincaid grade mean:", fk.mean())
+    plot_hist(fre, "Flesch Reading Ease", "flesch_reading_ease.pdf")
+    plot_hist(fk, "Flesch-Kincaid Grade", "flesch_kincaid.pdf")
+
+    # Similarity
+    print("Computing TF-IDF similarity distribution…")
+    sim = similarity_distribution(texts)
+    plot_hist(sim, "TF-IDF pairwise similarity", "tfidf_similarity.pdf")
+
+    # Language Detection
+    print("Detecting languages…")
+    lang_counts = detect_languages(texts)
+    langs, vals = zip(*lang_counts.items())
+    fig, ax = plt.subplots(figsize=(6, 4))
+    ax.bar(langs, vals)
+    ax.set_title("Language Detection")
+    save_fig_pdf(fig, "language_detection.pdf")
+
+    print("All EDA completed. Plots saved to:", PLOTS_DIR)
+
 
 if __name__ == "__main__":
     main()

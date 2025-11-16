@@ -1,28 +1,35 @@
-# src/eda_multimodal.py
 """
 Multimodal EDA:
 - alignment verification: how many rows have text only, audio only, both, or neither
 - simple cross-modal correlation: token length vs audio duration (if available)
 - saves small plots as PDFs
 """
+
+# Imports
 import os
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-from collections import Counter
+import matplotlib
+matplotlib.use("Agg")  # for headless environments
+from pathlib import Path
+import matplotlib.pyplot as plt # for plotting
+from collections import Counter # for counting
 
 from utils import PLOTS_DIR, save_fig_pdf
 
-DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "dataset")
-TRAIN_CSV = os.path.join(DATA_DIR, "train.csv")
-AUDIO_DIR = os.path.join(DATA_DIR, "audio")
+# Path setup
+DATASET_DIR = Path(__file__).parent.parent.parent / "dataset"
+AUDIO_DIR = DATASET_DIR / "audio"
+TRAIN_CSV = DATASET_DIR / "train.csv"
 
+# Ensure plots directory exists
 def load_df():
-    if os.path.exists(TRAIN_CSV):
+    if TRAIN_CSV.exists():
         return pd.read_csv(TRAIN_CSV)
     else:
         raise FileNotFoundError(f"{TRAIN_CSV} not found. Place CSVs into dataset/ or run save_dataset.py")
 
+# Check if a row has audio data
 def find_audio_in_row(row):
     # heuristics like in eda_audio
     for key in ["audio_path", "audio", "file", "filename"]:
@@ -30,8 +37,8 @@ def find_audio_in_row(row):
             return True
     return False
 
+# Compute audio durations map
 def compute_durations_map():
-    # builds a dict filebasename -> duration if audio folder present
     durations = {}
     if not os.path.isdir(AUDIO_DIR):
         return durations
@@ -45,6 +52,7 @@ def compute_durations_map():
             continue
     return durations
 
+# Main function
 def main():
     df = load_df()
     text_col = "interview_answer" if "interview_answer" in df.columns else "text"
@@ -64,6 +72,7 @@ def main():
         else:
             df["has_audio"] = False
 
+# Modality counts
     counts = Counter()
     for _, r in df.iterrows():
         if r["has_text"] and r["has_audio"]:
@@ -129,5 +138,6 @@ def main():
 
     print("Multimodal EDA complete. Plots saved in", PLOTS_DIR)
 
+# Run main
 if __name__ == "__main__":
     main()

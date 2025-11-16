@@ -1,27 +1,36 @@
-# src/eda_audio.py
+
 """
 Audio EDA:
 - expects either:
-  * column 'audio_path' in data CSV pointing to files under data/audio/
-  OR
-  * a folder data/audio/ with filenames referenced in CSV or matching index
+    column 'audio_path' in data CSV pointing to files under dataset/audio/
+    OR
+    a folder dataset/audio/ with filenames referenced in CSV or matching index
 - For each audio file: waveform plot, mel-spectrogram, duration calc
 - Saves aggregated histograms (durations) and per-sample figures if desired (sampled)
 """
+
+# Standard imports
 import os
-import pandas as pd
+import matplotlib
+matplotlib.use("Agg")  # for headless environments
+import pandas as pd # data handling
+from pathlib import Path
 import numpy as np
-import librosa
+import librosa # audio processing
 import librosa.display
-import matplotlib.pyplot as plt
-from tqdm import tqdm
+import matplotlib.pyplot as plt # for plotting
+from tqdm import tqdm # progress bars
+from utils import PLOTS_DIR, save_fig_pdf # custom utils
 
-from utils import PLOTS_DIR, save_fig_pdf
+# Path setup
+DATASET_DIR = Path(__file__).parent.parent.parent / "dataset"
+AUDIO_DIR = DATASET_DIR / "audio"
+TRAIN_CSV = DATASET_DIR / "train.csv"
 
-DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "dataset")
-AUDIO_DIR = os.path.join(DATA_DIR, "audio")
-TRAIN_CSV = os.path.join(DATA_DIR, "train.csv")
+# Ensure plots directory exists
+os.makedirs(PLOTS_DIR, exist_ok=True)
 
+# Find audio paths in dataframe
 def find_audio_paths(df):
     # Heuristic: look for common audio column names
     candidates = ["audio_path", "audio", "file", "filename"]
@@ -44,12 +53,14 @@ def find_audio_paths(df):
         return possible
     return [""] * len(df)
 
+# Load dataframe
 def load_df():
     if os.path.exists(TRAIN_CSV):
         return pd.read_csv(TRAIN_CSV)
     else:
         raise FileNotFoundError(f"{TRAIN_CSV} not found. Place CSVs into dataset/ or run save_dataset.py")
 
+# Compute audio features
 def compute_audio_features(path):
     # Loads audio and returns y, sr, duration, energy, low_energy_fraction
     try:
@@ -66,12 +77,14 @@ def compute_audio_features(path):
         # audio cannot be loaded
         return None
 
+# Plotting functions
 def plot_waveform(y, sr, out_name):
     fig, ax = plt.subplots(figsize=(10,3))
     librosa.display.waveshow(y, sr=sr)
     ax.set_title("Waveform")
     save_fig_pdf(fig, out_name)
 
+# Plot mel-spectrogram
 def plot_mel_spectrogram(y, sr, out_name):
     S = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=128)
     S_db = librosa.power_to_db(S, ref=np.max)
@@ -80,6 +93,7 @@ def plot_mel_spectrogram(y, sr, out_name):
     ax.set_title("Mel spectrogram")
     save_fig_pdf(fig, out_name)
 
+# Main function
 def main(sample_limit=10):
     df = load_df()
     audio_paths = find_audio_paths(df)
@@ -97,14 +111,17 @@ def main(sample_limit=10):
             else:
                 full_paths.append(None)
 
+# Check if any audio files found
     if not any(full_paths):
-        print("No audio files found. Skipping audio EDA. If you have audio, place files in data/audio/ and ensure 'audio_path' column points to them.")
+        print("No audio files found. Skipping audio EDA.")
         return
 
     durations = []
     low_fracs = []
     energies = []
     processed = 0
+
+    # Process each audio file
     for idx, path in tqdm(enumerate(full_paths)):
         if path is None:
             continue
@@ -130,6 +147,7 @@ def main(sample_limit=10):
         ax.set_title("Audio duration histogram")
         save_fig_pdf(fig, "audio_duration_histogram.pdf")
 
+# Energy and low-energy fraction plots
     if energies:
         fig, ax = plt.subplots(figsize=(8,4))
         ax.hist(energies, bins=50)
@@ -137,6 +155,7 @@ def main(sample_limit=10):
         ax.set_title("Audio energy histogram")
         save_fig_pdf(fig, "audio_energy_histogram.pdf")
 
+# Low-energy fraction plots
     if low_fracs:
         fig, ax = plt.subplots(figsize=(8,4))
         ax.hist(low_fracs, bins=40)
@@ -146,5 +165,6 @@ def main(sample_limit=10):
 
     print("Audio EDA complete. Plots saved in", PLOTS_DIR)
 
+# Run main
 if __name__ == "__main__":
     main()
