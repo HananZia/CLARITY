@@ -1,11 +1,11 @@
 """
 CLARITY Preprocessing Module - Diagnostic Suite v2.0
 Author: CLARITY Research Group
-Description: 
-    Benchmarking script for the text normalization pipeline. 
+Description:
+    Benchmarking script for the text normalization pipeline.
     Calculates noise reduction efficacy, latency distribution, and information density metrics (Entropy).
 """
-
+# Standard Libraries
 import time
 import math
 import statistics

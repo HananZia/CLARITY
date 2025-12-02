@@ -1,12 +1,14 @@
+# importing necessary libraries
 import pandas as pd
-from datasets import load_dataset as hf_load_dataset # Renaming to avoid confusion
+from datasets import load_dataset as hf_load_dataset
 
-def load_data(): # <--- This is the function name you call in train_eval.py
+# function to load data from Hugging Face
+def load_data():
     """
-    Fetching the data from Hugging Face. 
+    Fetching the data from Hugging Face.
     Using the 'ailsntua/QEvasion' dataset as specified in the assignment PDF.
     """
-    print(">> [Data Loader] Connectng to HuggingFace to grab the dataset...")
+    print(">> [Data Loader] Connecting to HuggingFace to grab the dataset...")
     
     try:
         # Loading the dataset. It comes with 'train' and 'test' splits already.

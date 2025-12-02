@@ -1,3 +1,5 @@
+
+# import necessary libraries
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
@@ -5,6 +7,7 @@ from sklearn.metrics import f1_score, confusion_matrix
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+# BASELINE A MODEL IMPLEMENTATION
 def run_baseline_A(train_df, test_df):
     """
     BASELINE A: TF-IDF + Logistic Regression
