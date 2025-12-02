@@ -1,10 +1,9 @@
-<<<<<<< HEAD
-<!-- CLARITY — Text-Based Political Interview Analysis
+ **CLARITY — Text-Based Political Interview Analysis**
 
 This project performs text-based exploratory data analysis (EDA) on political interview responses.
 It focuses on clarity and evasion labels and generates visualizations for deeper insights.
 
-Project Structure
+**Project Structure**
 CLARITY/
 │
 ├── Assignment1/
@@ -24,11 +23,11 @@ CLARITY/
 ├── venv/                      # Python virtual environment (ignored in git)
 └── LICENSE                    # MIT License
 
-Installation
+**Installation**
 
 Clone the repository
 
-git clone https://github.com/<your-username>/CLARITY.git
+git clone https://github.com/HananZia/CLARITY.git
 cd CLARITY
 
 
@@ -55,7 +54,7 @@ nltk.download('punkt')
 nltk.download('punkt_tab')
 nltk.download('stopwords')
 
-Usage
+**Usage**
 
 Run the main text EDA script:
 
@@ -70,7 +69,7 @@ Output: Plots saved to Assignment1/plots/*.pdf
 
 Optional sentiment analysis will run if Transformers are installed and a model is available.
 
-Features
+**Features**
 
 Token-level analysis: token length statistics, histograms, vocabulary size
 
@@ -84,7 +83,7 @@ Sentiment analysis: optional using HuggingFace Transformers
 
 Label distributions: clarity and evasion labels
 
-Notes
+**Notes**
 
 Audio EDA (eda_audio.py) is skipped if no audio files exist.
 
@@ -92,9 +91,6 @@ Plots are saved as PDFs to avoid GUI issues on headless systems.
 
 Safe fallbacks included for missing sentence tokenizers.
 
-License
+**License**
 
-This project is licensed under the MIT License — see LICENSE for details. -->
-=======
-
->>>>>>> e6ab7d8243b10983ae4d7f0d0f1ec1f0e9f8eeb4
+This project is licensed under the MIT License — see LICENSE for details.
